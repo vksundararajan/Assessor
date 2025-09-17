@@ -4,6 +4,7 @@ import shutil
 import chromadb
 from paths import VECTOR_DB_DIR
 
+
 def initialize_db(
     persist_directory, 
     collection_name, 
@@ -11,12 +12,10 @@ def initialize_db(
   ) -> chromadb.Collection:
     """
     Initialize or load a ChromaDB collection.
-
     Args:
         persist_directory (str): Directory to persist the database - "./exploit_db".
         collection_name (str): Name of the collection to create or load - "exploit_db".
         delete_existing (bool): If True, deletes existing data in the directory.
-    
     Returns:
         chromadb.Collection: The initialized or loaded collection.
     """
@@ -43,6 +42,7 @@ def initialize_db(
     print(f"ChromaDB initialized at {persist_directory}")
     return collection
 
+
 def main():
   collection = initialize_db(
     persist_directory=VECTOR_DB_DIR
@@ -50,5 +50,6 @@ def main():
     delete_existing=True
   ) 
   
+
 if __name__ == "__main__":
   sys.exit(main())
