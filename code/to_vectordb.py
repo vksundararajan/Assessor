@@ -1,12 +1,15 @@
 import os
 import sys
 import torch
+import json
 import shutil
 import chromadb
-from paths import VECTOR_DB_DIR
+from chromadb.config import Settings
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from typing import List
 from utils import load_all_exploits
+from paths import VECTOR_DB_DIR
 
 
 def initialize_db(
@@ -24,32 +27,35 @@ def initialize_db(
         chromadb.Collection: The initialized or loaded collection.
     """
     if os.path.exists(persist_directory) and delete_existing:
-      shutil.rmtree(persist_directory)
+        shutil.rmtree(persist_directory)
 
     os.makedirs(persist_directory, exist_ok=True)
 
-    client = chromadb.PersistentClient(path=persist_directory)
-    
     try:
-       collection = client.get_collection(name=collection_name)
-       print(f"Loaded existing collection: {collection_name}")
+        client = chromadb.PersistentClient(path=persist_directory)
     except Exception:
-       collection = client.create_collection(
-          name=collection_name,
-          metadata={
-            "hnsw:space": "cosine",
-            "hnsw:batch_size": 10000,
-          }
+        client = chromadb.Client(Settings(chroma_db_impl="chromadb.db.impl.sqlite.ChromaDB", persist_directory=persist_directory))
+
+    try:
+        collection = client.get_collection(name=collection_name)
+        print(f"Loaded existing collection: {collection_name}")
+    except Exception:
+        collection = client.create_collection(
+            name=collection_name,
+            metadata={
+                "hnsw:space": "cosine",
+                "hnsw:batch_size": 10000,
+            },
         )
-       print(f"Created new collection: {collection_name}")
-    
+        print(f"Created new collection: {collection_name}")
+
     print(f"ChromaDB initialized at {persist_directory}")
     return collection
 
 
-def chunk_exploit(
-    exploit: str, chunk_size: int = 1000, overlap: int = 200
-) -> list[str]:
+def chunk_exploit_text(
+  exploit: str, chunk_size: int = 1000, overlap: int = 200
+) -> List[str]:
   """
   Chunk the given exploit text into smaller pieces using RecursiveCharacterTextSplitter.
   Args:
@@ -60,14 +66,14 @@ def chunk_exploit(
       list[str]: A list of chunked text pieces.
   """
   text_splitter = RecursiveCharacterTextSplitter(
-      chunk_size=chunk_size,
-      chunk_overlap=overlap
+    chunk_size=chunk_size,
+    chunk_overlap=overlap
   )
 
   return text_splitter.split_text(exploit)
 
 
-def embed_documents(documents: list[str]) -> list[list[float]]:
+def embed_documents(documents: List[str]) -> List[List[float]]:
   """
   Generate embeddings for a list of documents using HuggingFaceEmbeddings.
   Args:
@@ -75,14 +81,22 @@ def embed_documents(documents: list[str]) -> list[list[float]]:
   Returns:
       list[list[float]]: A list of embeddings corresponding to the input documents.
   """
-  device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+  device = "cuda" if torch.cuda.is_available() else ("mps" if hasattr(torch.backends, "mps") and torch.backends.mps.is_available() else "cpu")
   model_name = "sentence-transformers/all-MiniLM-L6-v2"
-  mode = HuggingFaceEmbeddings(model_name=model_name, model_kwargs={"device": device})
-  embeddings = mode.embed_documents(documents)
+  try:
+    hf = HuggingFaceEmbeddings(model_name=model_name, model_kwargs={"device": device})
+  except Exception as e:
+    # Likely missing sentence-transformers or related dependency — provide actionable instruction
+    raise ImportError(
+      "Could not initialize HuggingFaceEmbeddings, means 'sentence-transformers' package is not installed. "
+      f"Original error: {e}"
+    )
+
+  embeddings = hf.embed_documents(documents)
   return embeddings
 
 
-def insert_exploits_to_db(collection: chromadb.Collection, exploits: list[str]):
+def insert_exploits_to_db(collection: chromadb.Collection, exploits: List[dict], dry_run: bool = False, batch_size: int = 5000):
   """
   Insert chunked exploits into the ChromaDB collection with embeddings.
   Args:
@@ -94,21 +108,37 @@ def insert_exploits_to_db(collection: chromadb.Collection, exploits: list[str]):
   next_id = collection.count()
 
   for exploit in exploits:
-    chunk_exploit = chunk_exploit(exploit)
-    embeddings = embed_documents(chunk_exploit)
-    ids = list(range(next_id, next_id + len(chunk_exploit)))
+    if isinstance(exploit, dict):
+      exploit_text = json.dumps(exploit)
+    else:
+      exploit_text = str(exploit)
+
+    chunks = chunk_exploit_text(exploit_text)
+    ids = list(range(next_id, next_id + len(chunks)))
     ids = [f"exploit_{i}" for i in ids]
-    collection.add(
-      documents=chunk_exploit,
-      embeddings=embeddings,
-      ids=ids
-    )
-    next_id += len(chunk_exploit)
+
+    if dry_run:
+      print(f"Dry run: would add {len(chunks)} chunks to collection starting at id {next_id}")
+    else:
+      embeddings = embed_documents(chunks)
+      
+      for start in range(0, len(chunks), batch_size):
+        end = start + batch_size
+        batch_docs = chunks[start:end]
+        batch_embeds = embeddings[start:end]
+        batch_ids = ids[start:end]
+        collection.add(
+          documents=batch_docs,
+          embeddings=batch_embeds,
+          ids=batch_ids
+        )
+
+    next_id += len(chunks)
 
 
 def main():
   collection = initialize_db(
-    persist_directory=VECTOR_DB_DIR
+    persist_directory=VECTOR_DB_DIR,
     collection_name="exploit_db",
     delete_existing=True
   ) 

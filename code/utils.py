@@ -1,12 +1,13 @@
 import os
+import json
 import yaml
 from dotenv import load_dotenv
 from pathlib import Path
-from typing import Union, Optional
+from typing import Union, Optional, List, Dict, Any
 from paths import DATA_DIR, ENV_PATH
 
 
-def load_exploit(exploit_external_id="1dfc5bee07ff"):
+def load_exploit(exploit_external_id: str = "1dfc5bee07ff") -> Dict[str, Any]:
   """
   Load exploit data from a JSON file based on the given external ID.
   Args:
@@ -24,12 +25,14 @@ def load_exploit(exploit_external_id="1dfc5bee07ff"):
   
   try:
     with open(exploit_fpath, "r") as f:
-      exploit_data = f.read()
+      exploit_data = json.load(f)
   except Exception as e:
-    raise IOError(f"Error reading exploit file: {e}")
+    raise IOError(f"Error reading or parsing exploit file {exploit_fpath}: {e}")
+
+  return exploit_data
 
 
-def load_all_exploits(exploit_dir: str = DATA_DIR) -> list:
+def load_all_exploits(exploit_dir: str = DATA_DIR) -> List[Dict[str, Any]]:
   """
   Load all exploit data from JSON files in the specified directory.
   Args:
@@ -41,12 +44,16 @@ def load_all_exploits(exploit_dir: str = DATA_DIR) -> list:
   """
   exploits = []
 
+  if not os.path.isdir(exploit_dir):
+    raise FileNotFoundError(f"Exploit directory not found: {exploit_dir}")
+
   for exploit_id in os.listdir(exploit_dir):
     if exploit_id.endswith(".json"):
       try:
         exploit = load_exploit(exploit_external_id=exploit_id.replace(".json", ""))
         exploits.append(exploit)
       except Exception as e:
+        # Log and continue so one bad file doesn't stop processing
         print(f"Error loading exploit {exploit_id}: {e}")
 
   return exploits

@@ -8,6 +8,7 @@ reasoning_strategies:
     2. Address each step systematically
     3. Show your reasoning for each step
     4. Then provide your final conclusion
+    5. Do not hallucinate.
 
   ReAct: |
     Use this systematic approach to provide your response:
@@ -18,10 +19,11 @@ reasoning_strategies:
 
     (Repeat steps 1–4 as needed)
 
-    Then provide your final answer.
+    Then provide your final answer. Do not hallucinate.
 
   Self-Ask: |
     Use this systematic approach to provide your response:
     1. Break the main question into smaller sub-questions.
     2. Answer each sub-question thoroughly.
     3. Then, based on those answers, synthesize a clear and thoughtful final response.
+    4. Do not hallucinate.
