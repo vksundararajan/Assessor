@@ -14,21 +14,24 @@ logger = logging.getLogger("rag_chat")
 
 
 class LLMClient:
-  """Small wrapper to call a supported LLM provider.
-
-  Tries Google Gemini (langchain_google_genai) if GOOGLE_API_KEY is present, otherwise falls back to
-  Groq (langchain_groq) if available. If neither is available the class will raise on invoke().
+  """
+  mall wrapper to call a supported LLM provider.
+  Currently supports:
+  - Google Gemini via langchain_google_genai (default) 
   """
 
   def __init__(self, provider: str = None, model: str | None = None, temperature: float = 0.1):
     self.provider = provider or os.getenv("LLM_PROVIDER", "google")
     self.model = model
     self.temperature = temperature
-
     self._client = None
     # lazy imports
 
   def _init_google(self):
+    """
+    Initialize Google Gemini LLM client.
+    Requires the environment variable GOOGLE_API_KEY to be set.    
+    """
     try:
       from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -41,6 +44,15 @@ class LLMClient:
       return False
 
   def invoke(self, prompt: str) -> str:
+    """
+    Invoke the LLM with the given prompt.
+    Args:
+      prompt (str): The prompt to send to the LLM.
+    Returns:
+      str: The LLM's response.
+    Raises:
+      RuntimeError: If no supported LLM provider is available or invocation fails.
+    """
     if self._client is None:
       if self.provider == "google":
         ok = self._init_google()
@@ -51,7 +63,6 @@ class LLMClient:
         if not self._init_google():
           raise RuntimeError("No supported LLM providers available (Google).")
 
-    
     try:
       if self._client.__class__.__name__.lower().startswith("chatgoogle"):
         from langchain_core.messages import SystemMessage, HumanMessage
@@ -68,15 +79,27 @@ class LLMClient:
 
 
 def get_collection(collection_name: str = "exploit_db"):
-  """Return the persistent chroma collection."""
+  """
+  Get or initialize the ChromaDB collection for the vector database.
+  Args:
+    collection_name (str): Name of the collection to create or load. Defaults to "exploit_db".
+  Returns:
+    chromadb.Collection: The initialized or loaded collection.
+  """
   coll = initialize_db(persist_directory=VECTOR_DB_DIR, collection_name=collection_name, delete_existing=False)
   return coll
 
 
 def retrieve_relevant_documents(collection, query: str, n_results: int = 6, threshold: float = 0.5) -> List[Dict[str, Any]]:
-  """Embed the `query`, query Chroma and return filtered results including documents and metadata.
-
-  Returns a list of dicts: {id, document, metadata, distance}
+  """
+  Retrieve relevant documents from the vector database based on the query.
+  Args:
+      collection (chromadb.Collection): The ChromaDB collection to query.
+      query (str): The user's query string.
+      n_results (int): Number of top results to retrieve. Defaults to 6.
+      threshold (float): Distance threshold for filtering results. Defaults to 0.5.
+  Returns:
+      list: A list of dictionaries containing the retrieved documents and their metadata.
   """
   logger.info("Embedding query")
   q_embed = embed_documents([query])[0]
@@ -104,10 +127,15 @@ def retrieve_relevant_documents(collection, query: str, n_results: int = 6, thre
 
 
 def build_rag_prompt(prompt_template: str, question: str, retrieved: List[Dict[str, Any]], max_chars_per_doc: int = 1200) -> str:
-  """Compose the final prompt for the LLM using a template and the retrieved snippets.
-
-  The prompt_template should include a placeholder like {context} and {question}.
-  If the template is missing, we build a simple default prompt.
+  """
+  Build the RAG prompt by combining the retrieved documents and the user's question.
+  Args:
+    prompt_template (str): The prompt template with placeholders for context and question.
+    question (str): The user's question.
+    retrieved (list): List of retrieved documents with metadata.
+    max_chars_per_doc (int): Maximum characters to include from each document. Defaults to 1200.
+  Returns:
+    str: The final prompt to send to the LLM.
   """
   context_parts = []
   for r in retrieved:
@@ -130,13 +158,21 @@ def build_rag_prompt(prompt_template: str, question: str, retrieved: List[Dict[s
 
   # default prompt
   return (
-    "You are a security analyst assistant. Use the context below from a vulnerability knowledge-base to answer the question. "
+    "You are a security research assistant. Use the context below from a vulnerability knowledge-base to answer the question. "
     "Cite the Source (exploit fullname or id) for statements. If the answer is uncertain, say so and reference the snippets.\n\n"
     f"Context:\n{context}\n\nQuestion:\n{question}\n\nAnswer concisely and include sources."
   )
 
 
 def persist_chat(turn: Dict[str, Any], file_path: str = os.path.join(OUTPUT_DIR, "chat_history.json")):
+  """
+  Persist the chat turn to a JSON file.
+  Args:
+    turn (dict): The chat turn containing the query, retrieved ids, metadata, and answer.
+    file_path (str): Path to the JSON file to append the chat history. Defaults to "outputs/chat_history.json".
+  Returns:
+    None
+  """
   try:
     if os.path.exists(file_path):
       with open(file_path, "r", encoding="utf-8") as f:
@@ -154,60 +190,69 @@ def persist_chat(turn: Dict[str, Any], file_path: str = os.path.join(OUTPUT_DIR,
 
 
 def interactive_chat(collection_name: str = "exploit_db"):
+  """
+  Start an interactive chat session with the RAG assistant.
+  Args:
+    collection_name (str): Name of the ChromaDB collection to use. Defaults to "exploit_db".
+  Returns:
+    None
+  """
   collection = get_collection(collection_name)
 
+  ### Load system prompt if available
   try:
     cfg = load_yaml_config(PROMPT_CONFIG_PATH)
     sys_prompt_entry = cfg.get("cybersecurity_research_assistant_prompt") or {}
-    prompt_template = sys_prompt_entry.get("template")
     system_role_text = None
-    if not prompt_template:
-      role = sys_prompt_entry.get("role") or sys_prompt_entry.get("description") or "You are a helpful assistant."
-      constraints = "\n".join(sys_prompt_entry.get("output_constraints", [])) if sys_prompt_entry.get("output_constraints") else ""
-      output_fmt = sys_prompt_entry.get("output_format")
-      examples = sys_prompt_entry.get("examples")
-      system_role_text = "".join([role, "\n\n", constraints])
-    else:
-      system_role_text = None
+    role = sys_prompt_entry.get("role") or sys_prompt_entry.get("description") or "You are a helpful assistant."
+    constraints = "\n".join(sys_prompt_entry.get("output_constraints", [])) if sys_prompt_entry.get("output_constraints") else ""
+    output_fmt = sys_prompt_entry.get("output_format")
+    examples = sys_prompt_entry.get("examples")
+    prompt_parts = [
+      role, "\n\n",
+      constraints, "\n\n",
+      "### Output Format\n", 
+      json.dumps(output_fmt, indent=2), "\n\n",
+      "### Examples\n",
+      json.dumps(examples, indent=2)
+    ]
+    system_role_text = "".join(prompt_parts)
   except Exception:
     prompt_template = None
     system_role_text = None
 
+  ### Load reasoning strategies if available
   reasoning_cfg = None
   reasoning_choice = None
   try:
     reasoning_cfg = load_yaml_config(REASONING_CONFIG_PATH)
     strategies = reasoning_cfg.get("reasoning_strategies", {})
     if strategies:
-      # let user pick via env or interactive prompt
-      env_choice = os.getenv("RAG_REASONING", None)
-      if env_choice and env_choice in strategies:
-        reasoning_choice = env_choice
-      else:
-        print("Available reasoning strategies:")
-        for i, k in enumerate(strategies.keys()):
-          print(f"  {i+1}) {k}")
-        try:
-          pick = input("Choose reasoning strategy number (or press Enter for none): ")
-          if pick:
-            pick_idx = int(pick) - 1
-            reasoning_choice = list(strategies.keys())[pick_idx]
-        except Exception:
-          reasoning_choice = None
-
+      # let user pick via interactive prompt
+      print("Available reasoning strategies:")
+      for i, k in enumerate(strategies.keys()):
+        print(f"  {i+1}) {k}")
+      try:
+        pick = input("Choose reasoning strategy number (or press Enter for none): ")
+        if pick:
+          pick_idx = int(pick) - 1
+          reasoning_choice = list(strategies.keys())[pick_idx]
+      except Exception:
+        reasoning_choice = None
   except Exception:
     reasoning_cfg = None
     reasoning_choice = None
 
-  provider = os.getenv("LLM_PROVIDER", "google")
-  model = os.getenv("LLM_MODEL", None)
-  llm_client = LLMClient(provider=provider, model=model)
+  ### Initialize LLM client
+  llm_client = LLMClient(provider="google")
 
   print("RAG assistant (type 'exit' to quit, 'config' to change threshold/topk)")
   print("\n---\n")
-  n_results = int(os.getenv("RAG_TOPK", "6"))
-  threshold = float(os.getenv("RAG_THRESHOLD", "0.5"))
+  
+  n_results = 6  # Number of top documents to retrieve. Increase for more context, decrease for less noise. (Range: 1-20)
+  threshold = 0.5  # Distance threshold for filtering. Lower is stricter (more relevant), higher is more lenient. (Range: 0.0-1.0)
 
+  ### Chat loop has begun
   while True:
     try:
       query = input("You: ").strip()
@@ -233,17 +278,15 @@ def interactive_chat(collection_name: str = "exploit_db"):
     for i, r in enumerate(retrieved):
       logger.info("%d) id=%s distance=%.4f source=%s", i + 1, r.get("id"), r.get("distance") or 0.0, r.get("metadata", {}).get("fullname") or r.get("metadata", {}).get("exploit_id"))
 
-    effective_template = prompt_template
+    # Default prompt
+    main_prompt = "Context:\n{context}\n\nQuestion:\n{question}\n\nAnswer:\n"
     if reasoning_choice and reasoning_cfg:
       reasoning_text = reasoning_cfg.get("reasoning_strategies", {}).get(reasoning_choice)
       if reasoning_text:
-        effective_template = ("""{context}\n\nReasoning Strategy: """ + reasoning_choice + "\n" + reasoning_text + "\n\n{question}")
+        main_prompt = ("""{context}\n\nReasoning Strategy: """ + reasoning_choice + "\n" + reasoning_text + "\n\n{question}")
 
-    if system_role_text:
-      if effective_template:
-        effective_template = system_role_text + "\n\n" + effective_template
-      else:
-        effective_template = system_role_text + "\n\nContext:\n{context}\n\nQuestion:\n{question}\n\nAnswer:\n"
+    # Combine the system role with the main prompt
+    effective_template = system_role_text + "\n\n" + main_prompt
 
     prompt = build_rag_prompt(effective_template, question=query, retrieved=retrieved)
 

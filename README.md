@@ -2,9 +2,9 @@
 
 A cybersecurity research assistant built using Retrieval-Augmented Generation (RAG). Kestrel enables efficient question-answering on cybersecurity knowledge by combining vector search with large language models, making research faster and more precise.
 
-🔗 [<u>Watch a demo of Kestrel in action</u>](assets/demo.mov)
+🔗 [<u>Watch a demo of Kestrel in action</u>](outputs/demo.mov)
 
-### [Features]()
+## [Features]()
 - Choose reasoning strategy: Chain of Thought, ReAct, Self-Ask, or skip for direct answers
 - Cybersecurity-focused RAG pipeline for precise and reliable responses
 - Converts knowledge bases into vector embeddings for fast retrieval
@@ -14,15 +14,13 @@ A cybersecurity research assistant built using Retrieval-Augmented Generation (R
 - Modular design to swap datasets, vector databases, or LLM providers
 - Stores responses and logs in the outputs/ directory for review
 
-### [Repo Structure]()
+## [Repository Structure]()
 ```
 📦 Kestrel
 ├─ .env.example
 ├─ .gitignore
 ├─ LICENSE
 ├─ README.md
-├─ assets
-│  └─ demo.mov
 ├─ code
 │  ├─ config
 │  │  ├─ prompt_config.yaml
@@ -35,12 +33,13 @@ A cybersecurity research assistant built using Retrieval-Augmented Generation (R
 │  └─ 1dfc5bee07ff.json
 ├─ outputs
 │  ├─ .gitignore
+│  ├─ demo.mov
 │  └─ vector_db
 │     └─ .gitignore
 └─ requirements.txt
 ```
 
-### [Installation]()
+## [Installation]()
 ```
 git clone https://github.com/vksundararajan/Kestrel.git
 cd Kestrel
@@ -50,7 +49,7 @@ pip install -r requirements.txt
 python code/to_llm.py
 ```
 
-### [cybersecurity Research Queries]()
+## [cybersecurity Research Queries]()
 
 ```
 > What mitigation steps are recommended for an unauthenticated directory traversal vulnerability in a web appliance.
@@ -62,11 +61,11 @@ python code/to_llm.py
 ### [Kestrel will]()
 _Kestrel_ first asks the user to choose a reasoning mode like CoT (Chain of Thought), ReAct, Self-Ask, or simply press Enter to continue without selecting. The user provides their query. Kestrel fetches the most relevant documents from the indexed vector database. The retrieved documents are combined with the chosen reasoning instructions and the system prompt. The complete prompt is sent to the LLM, which produces a grounded, finite answer.
 
-### [Roadmap]()
+## [Roadmap]()
 - Add support for multiple vector DBs (FAISS, Pinecone, Weaviate).
 - Expand cybersecurity corpus (NVD, MITRE ATT&CK, CWE, etc.).
 - Web interface for interactive research.
 - Evaluation framework for measuring answer quality.
 
-### [License]()
+## [License]()
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
