@@ -19,7 +19,10 @@ A cybersecurity research assistant built using Retrieval-Augmented Generation (R
 📦 Kestrel
 ├─ .env.example
 ├─ .gitignore
+├─ LICENSE
 ├─ README.md
+├─ assets
+│  └─ demo.mov
 ├─ code
 │  ├─ config
 │  │  ├─ prompt_config.yaml
@@ -64,3 +67,6 @@ _Kestrel_ first asks the user to choose a reasoning mode like CoT (Chain of Thou
 - Expand cybersecurity corpus (NVD, MITRE ATT&CK, CWE, etc.).
 - Web interface for interactive research.
 - Evaluation framework for measuring answer quality.
+
+### [License]()
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
