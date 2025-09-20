@@ -2,7 +2,7 @@
 
 A cybersecurity research assistant built using Retrieval-Augmented Generation (RAG). Kestrel enables efficient question-answering on cybersecurity knowledge by combining vector search with large language models, making research faster and more precise.
 
-🔗 [<u>Watch a demo of Kestrel in action</u>](outputs/demo.mov)
+🔗 [<u>Watch a demo of Kestrel in action</u>](https://drive.google.com/file/d/1CgJYY5Cgwb60fmACsO39SvuEQIv_7NuD/view?usp=sharing)
 
 ## [Features]()
 - Choose reasoning strategy: Chain of Thought, ReAct, Self-Ask, or skip for direct answers
